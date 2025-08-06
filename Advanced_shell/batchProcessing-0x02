@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Create a folder to store data
-mkdir -p pokemon_data
+# Directory to store data
+output_dir="pokemon_data"
+mkdir -p "$output_dir"
 
 # List of Pokémon
 pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
@@ -10,14 +11,26 @@ pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
 for pokemon in "${pokemon_list[@]}"; do
     echo "Fetching data for $pokemon..."
 
-    # Fetch and save to file
-    curl -s "https://pokeapi.co/api/v2/pokemon/$pokemon" -o "pokemon_data/${pokemon}.json"
+    success=false
+    attempts=0
 
-    if [ $? -eq 0 ]; then
-        echo "Saved data to pokemon_data/${pokemon}.json "
-    else
-        echo "Failed to fetch data for $pokemon "
+    while [[ $success = false && $attempts -lt 3 ]]; do
+        # Fetch data
+        response=$(curl -s -w "%{http_code}" -o "$output_dir/$pokemon.json" "https://pokeapi.co/api/v2/pokemon/$pokemon")
+        http_code="${response: -3}"  # Get the last 3 characters (HTTP status code)
+
+        if [[ "$http_code" -eq 200 ]]; then
+            echo "Saved data to $output_dir/$pokemon.json "
+            success=true
+        else
+            echo "Failed to fetch $pokemon (status: $http_code), retrying..."
+            ((attempts++))
+            sleep 2
+        fi
+    done
+
+    # Log if still unsuccessful
+    if [[ $success = false ]]; then
+        echo "Failed to fetch $pokemon after 3 attempts." >> fetch_errors.log
     fi
-
-    sleep 1  # Prevent rate limiting
 done
