@@ -7,25 +7,44 @@ mkdir -p "$output_dir"
 # List of Pokémon
 pokemon_list=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
 
-# Function to fetch data for one Pokémon
+# Timeout in seconds for each fetch
+timeout=10
+
+# Function to fetch data
 fetch_pokemon() {
     pokemon=$1
     echo "Fetching data for $pokemon..."
-    curl -s -o "$output_dir/${pokemon}.json" "https://pokeapi.co/api/v2/pokemon/$pokemon"
 
+    # Start curl in background and get PID
+    curl -s -o "$output_dir/${pokemon}.json" "https://pokeapi.co/api/v2/pokemon/$pokemon" &
+    pid=$!
+
+    # Wait for process to complete or timeout
+    SECONDS=0
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$SECONDS" -gt "$timeout" ]; then
+            echo " $pokemon took too long. Killing process $pid..."
+            kill "$pid"
+            echo "Timed out fetching $pokemon" >> fetch_errors.log
+            return
+        fi
+        sleep 1
+    done
+
+    wait "$pid"
     if [[ $? -eq 0 ]]; then
-        echo "Saved data to $output_dir/${pokemon}.json "
+        echo "Saved data to $output_dir/${pokemon}.json"
     else
         echo "Failed to fetch data for $pokemon" >> fetch_errors.log
     fi
 }
 
-# Loop through Pokémon and run fetch in background
+# Run all fetches in parallel
 for pokemon in "${pokemon_list[@]}"; do
     fetch_pokemon "$pokemon" &
 done
 
-# Wait for all background jobs to finish
+# Wait for all jobs
 wait
 
-echo "All data fetched in parallel."
+echo "All parallel fetches completed."
